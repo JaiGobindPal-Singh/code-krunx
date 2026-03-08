@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include "config.h"
 #include "circularBufferSensorData.h"
 #include "strikeManager.h"

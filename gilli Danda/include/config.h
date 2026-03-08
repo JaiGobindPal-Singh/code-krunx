@@ -15,7 +15,7 @@ constexpr uint16_t RINGING_THRESHOLD = 200;
 constexpr uint16_t LED_BUILTIN = 5;
 constexpr uint16_t STRIKE_THRESHOLD = 5;
 constexpr uint16_t STRIKE_DELAY = 100;
-constexpr uint16_t BUFFER_SIZE = 200;
+constexpr size_t BUFFER_SIZE = 200;
 
 
 #endif

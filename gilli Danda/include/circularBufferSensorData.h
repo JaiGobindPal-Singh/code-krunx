@@ -6,7 +6,6 @@
 #ifndef CIRCULARBUFFERSENSORDATA_H
 #define CIRCULARBUFFERSENSORDATA_H
 #include "config.h"
-#include <Arduino.h>
 
 struct SensorData {
   unsigned long readTime;
