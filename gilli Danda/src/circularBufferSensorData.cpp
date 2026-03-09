@@ -1,10 +1,11 @@
 #include "circularBufferSensorData.h"
 
-CircularBuffer::CircularBuffer()
-{
-    head = 0;
-    isFull = false;
-}
+//initializing the static members of CircularBuffer class
+SensorData CircularBuffer::dataBuffer[BUFFER_SIZE] = {};
+SensorData CircularBuffer::res[BUFFER_SIZE] = {};
+size_t CircularBuffer::head = 0;
+bool CircularBuffer::isFull = false;
+
 
 /**
  * @brief Inserts a new sensor data into the circular buffer. If the buffer is full, it overwrites the oldest data.
@@ -54,8 +55,7 @@ SensorData *CircularBuffer::getData()
         // storing the data at left size of head in circular buffer
         for (size_t k = 0; k < head; k++)
         {
-            res[j] = dataBuffer[k];
-            j++;
+            res[j++] = dataBuffer[k];
         }
     }
     return res;

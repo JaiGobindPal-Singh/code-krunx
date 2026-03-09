@@ -5,9 +5,9 @@
 
 class StrikeManager{
     private:
-    unsigned long lastStrike = 0;
+    static unsigned long lastStrike;
     public:
-    bool detectStrike(const float);
+    static bool detectStrike(const float);
 };
 
 #endif

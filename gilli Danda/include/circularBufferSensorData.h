@@ -14,25 +14,23 @@ struct SensorData {
 class CircularBuffer
 {
 private:
-    SensorData dataBuffer[BUFFER_SIZE];
-    SensorData res[BUFFER_SIZE];
-    size_t head;
-    bool isFull;
+    static SensorData dataBuffer[BUFFER_SIZE];
+    static SensorData res[BUFFER_SIZE];
+    static size_t head;
+    static bool isFull;
 
 public:
-    CircularBuffer();  // constructor
-
     // function to insert data in buffer
-    void insertData(float magnitude);
+    static void insertData(float magnitude);
 
     // function to get the sensor data in order
-    SensorData* getData();
+    static SensorData* getData();
 
     // function to get total number of samples
-    size_t getSampleCount();
+    static size_t getSampleCount();
 
     // function to reset buffer
-    void resetBuffer();
+    static void resetBuffer();
 };
 
 #endif

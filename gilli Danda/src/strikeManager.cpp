@@ -1,5 +1,7 @@
 #include "strikeManager.h"
 
+//defining the static member of StrikeManager class
+unsigned long StrikeManager::lastStrike = 0;
 
 /**
  * @brief Detects a strike based on the magnitude of the sensor reading and the time since the last detected strike. A strike is detected if the magnitude exceeds the defined STRIKE_THRESHOLD and if the time since the last detected strike exceeds the RINGING_THRESHOLD to prevent multiple detections from a single strike.
