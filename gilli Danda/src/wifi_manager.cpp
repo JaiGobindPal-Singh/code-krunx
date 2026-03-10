@@ -1,10 +1,3 @@
-/**
- * @file wifi_manager.cpp
- * @brief This source file contains the implementation of the WifiManager class, which is responsible for managing wifi connections.
- * @author jgps
- * @date 2026-03-10
- */
-
 #include "wifi_manager.h"
 #include <WiFi.h>
 
@@ -139,4 +132,5 @@ bool WifiManager::handleUserWifiConnectionRequest()
  */
 bool WifiManager:: connectDefaultWifi(){
     //todo get wifi credentials from storage and connect to wifi if credentials are valid and available, return true if connected successfully, otherwise return false
+    return false;
 }
