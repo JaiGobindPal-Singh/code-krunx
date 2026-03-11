@@ -66,7 +66,7 @@ SensorData *CircularBuffer::getData()
  *
  * @return {size_t} The total number of samples currently stored in the buffer.
  */
-size_t CircularBuffer ::getSampleCount()
+size_t CircularBuffer::getSampleCount()
 {
     return isFull ? BUFFER_SIZE : head;
 }

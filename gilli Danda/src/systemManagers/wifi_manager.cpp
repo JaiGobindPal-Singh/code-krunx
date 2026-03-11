@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include <WiFi.h>
+#include "storage_manager.h"
 
 /**
  * @brief Connects to a Wi-Fi network using the provided SSID and password.
@@ -29,7 +30,7 @@ bool WifiManager::connectWifi(const char *SSID, const char *WIFI_PASS)
         i++;
         // Serial.print(WiFi.status());
         Serial.print(".");
-        if (WiFi.status() == WL_CONNECT_FAILED || i > 180)
+        if (WiFi.status() == WL_CONNECT_FAILED || i > WIFI_CONNECT_TIMEOUT * 2)
         {
             Serial.println("Error: Connection failed. Possible incorrect SSID/password OR Timeout");
             return false;
@@ -116,12 +117,14 @@ bool WifiManager::handleUserWifiConnectionRequest()
     Serial.println("Password: " + wifi_password);
 
     // connecting to wifi with the provided credentials
-    if(!WifiManager:: connectWifi(wifi_ssid.c_str(), wifi_password.c_str())){
+    if(!WifiManager::connectWifi(wifi_ssid.c_str(), wifi_password.c_str())){
         Serial.println("wifi connection failed");
         return false;
     }
 
-    //todo saving wifi credentials to storage for future use and auto connection
+    // saving the wifi credentials in storage for future use
+    StorageManager::saveKeyValueToStorage("wifi_ssid", wifi_ssid);
+    StorageManager::saveKeyValueToStorage("wifi_pass", wifi_password);
     Serial.println("wifi connected");
     return true;
 }
@@ -131,6 +134,24 @@ bool WifiManager::handleUserWifiConnectionRequest()
  * @return {bool} - Returns true if the connection is successful, false otherwise.
  */
 bool WifiManager:: connectDefaultWifi(){
-    //todo get wifi credentials from storage and connect to wifi if credentials are valid and available, return true if connected successfully, otherwise return false
-    return false;
+
+    // retrieving wifi credentials from storage
+    String SSID = StorageManager::getValueFromStorage("wifi_ssid");
+    SSID.trim();
+    String password = StorageManager::getValueFromStorage("wifi_pass");
+    password.trim();
+
+    // checking if the wifi credentials are available in storage
+    if(SSID == "-1" || password == "-1"){
+        Serial.println("no saved wifi details found");
+        return false;
+    }
+
+    // connecting to wifi with the retrieved credentials and returning the connection status
+    if(!WifiManager::connectWifi(SSID.c_str(),password.c_str())){
+        Serial.println("wifi connection failed");
+        return false;
+    }
+    Serial.println("wifi connected");
+    return true;
 }

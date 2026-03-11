@@ -1,6 +1,7 @@
 #include "server_manager.h"
 #include "wifi_manager.h"
 #include <HTTPClient.h>
+#include "storage_manager.h"
 
 // server adress
 String ServerManager::serverAdress = "";
@@ -115,15 +116,35 @@ bool ServerManager::handleUserWebserverUpdationRequest()
     //setting the webserver adress
     if(ServerManager::setServer(tempServerAdress)){
         Serial.println("server setup done");
-        //todo save the server credentials to storage
+        //saving details in storage for future use
+        StorageManager::saveKeyValueToStorage("serverAdress", tempServerAdress);
         return true;
     }
     Serial.println("invalid url or server is not reachable");
     return false;
 }
 
+/**
+ * @brief Connects to the default webserver by retrieving the server address from storage and testing the connection. It checks if the server address is available in storage, and if so, it attempts to set the server and test the connection.
+ * @return {bool} - Returns true if the server address is retrieved successfully from storage, set correctly, and the connection test passes; false otherwise.
+ */
 bool ServerManager::connectDefaultWebserver(){
-    //todo implimentation after storage manager
-    //inst : load webserver from storage thaen setServer
-    return false;
+
+    //loading the webserver details from storage
+    String webserver = StorageManager::getValueFromStorage("serverAdress");
+    webserver.trim();
+
+    //checking if the webserver details are available in storage
+    if(webserver == "-1"){
+        Serial.println("default webserver not found");
+        return false;
+    }
+
+    //connecting to server and returning the connection status
+    if(!ServerManager::setServer(webserver)){
+        Serial.println("webserver not available");
+        return false;
+    };
+    Serial.println("Webserver connected");
+    return true;
 }

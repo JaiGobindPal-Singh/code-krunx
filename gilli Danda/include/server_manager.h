@@ -9,10 +9,6 @@
 #define SERVER_MANAGER_H
 #include "config.h"
 
-
-/**
- * @brief The ServerManager class is responsible for managing the server connection and handling server-related operations.
- */
 class ServerManager{
     private:
     static String serverAdress;
