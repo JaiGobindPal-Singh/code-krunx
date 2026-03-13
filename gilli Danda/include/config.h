@@ -38,4 +38,11 @@ inline void clearSerialInputBuffer()
     }
 }
 
+//enum class to manage the working status of the esp32 and control the led indicator accordingly
+enum class WORKING_STATUS
+{
+    STABLE,
+    CONNECTING,
+    ERROR
+};
 #endif
