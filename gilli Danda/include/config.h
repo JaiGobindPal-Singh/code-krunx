@@ -45,4 +45,13 @@ enum class WORKING_STATUS
     CONNECTING,
     ERROR
 };
+
+/**
+ * @brief absolute the float value
+ * @param {float} the float value to be absoluted
+ * @return {float} the absoluted value
+ */
+inline float absFloat(float x) {
+    return x < 0 ? -x : x;
+}
 #endif

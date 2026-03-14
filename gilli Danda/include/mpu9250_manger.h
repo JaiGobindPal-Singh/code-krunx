@@ -15,9 +15,9 @@ class MPU9250Manager {
   public:
   static bool init();
   static void update();
+  static float linearAcceleration;
   private:
   static MPU9250_WE* mpu;
-  static float linearAcceleration;
 
 };
 #endif

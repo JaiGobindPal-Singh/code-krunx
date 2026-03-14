@@ -39,7 +39,7 @@ void MPU9250Manager::update(){
     float magnitudeG = sqrt(g.x*g.x + g.y*g.y + g.z*g.z);
 
     // converting to m/s^2 and removing gravity and storing the linear acceleration in the static member variable
-    MPU9250Manager::linearAcceleration = (magnitudeG - 1.0) * 9.81; 
+    MPU9250Manager::linearAcceleration = absFloat(magnitudeG - 1.0) * 9.81; 
 
 }
 

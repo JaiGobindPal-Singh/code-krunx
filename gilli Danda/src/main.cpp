@@ -25,6 +25,7 @@ String requestData; // requestData is sensor data in json string format that wil
 
 WORKING_STATUS LED_indicator; // LED_indicator controls the LED_BUILTIN
 
+uint16_t delayStrike = 0; // variable to control the strike delay and post data
 
 //* Helper Methods
 /**
@@ -172,21 +173,146 @@ void manageLEDThread()
         NULL,          /* Parameter of the task */
         1,             /*Priority of the task */
         NULL,
-        1
-    );
+        1);
 }
 
-
-
-
 //*Main Controller Methods
+void controllerLoop(void *pvParameters)
+{
+    for (;;)
+    {
+        // updating the sensor data and calculating the linear acceleration magnitude
+        MPU9250Manager::update();
+
+        // magnitude contains the linear acceleration calculated from the sensor data
+        float magnitude = MPU9250Manager::linearAcceleration;
+
+        // if strike is detected send data
+        if (StrikeManager::detectStrike(magnitude))
+        {
+            SensorData *liveData; // liveData will contain the sensor data in array format
+
+            // adding a delay to send strike for more accuracy and inserting the data in buffer during the delay
+            while (delayStrike < (STRIKE_DELAY / SAMPLE_RATE_MS))
+            {
+                delayStrike++;
+                vTaskDelay(pdMS_TO_TICKS(SAMPLE_RATE_MS));
+                CircularBuffer::insertData(magnitude); // inserting the data in buffer during the delay
+            }
+
+            // retreiving the data from buffer
+            liveData = CircularBuffer::getData();
+            uint16_t amountOfData = CircularBuffer::getSampleCount();
+
+            doc.clear(); // clearing previous data
+
+            // converting data to json format for transmission
+            JsonArray arr = doc["sensorData"].to<JsonArray>(); // creating the array
+            for (uint16_t iter = 0; iter < amountOfData; iter++)
+            {
+                // Add an object to the array for each struct
+                JsonObject obj = arr.add<JsonObject>();
+                obj["readTime"] = liveData[iter].readTime;
+                obj["magnitude"] = liveData[iter].magnitude;
+            }
+            requestData = "";
+            serializeJson(doc, requestData);
+
+            // send data over http async way
+            sendDataOverHttpThread(requestData);
+            vTaskDelay(pdMS_TO_TICKS(50)); // Giving task time to copy data
+
+            // resetting the buffer so it can store new values
+            CircularBuffer::resetBuffer();
+        }
+
+        delayStrike = 0; // resetting the delay
+        vTaskDelay(pdMS_TO_TICKS(SAMPLE_RATE_MS));
+    }
+}
 
 void setup()
 {
-    pinMode(LED_BUILTIN, OUTPUT); // setting the built in led pin as output for debugging and indication purposes
-    Serial.begin(115200);         // begin serial
+    // Starting serial communication for debugging and user information
+    Serial.begin(115200);
+
+    // reserving the memory to prevent fragmentation
+    requestData.reserve(16000);
+
+    /* testing
+    httpMutex = xSemaphoreCreateMutex(); // defining the mutex to manage threads
+    */
+
+    // setting up led indicator thread
+    pinMode(LED_BUILTIN, OUTPUT);
+    LED_indicator = WORKING_STATUS::CONNECTING;
+    manageLEDThread();
+
+    // printing available wifi networks for debugging and user information
+    WifiManager::scanWifiNetworks();
+
+    uint8_t defaultCounter = 0;
+
+    // prompting user to choose btw custom credentials or saved credentials
+    Serial.println("press <space> + <enter> to prevent using saved credentials");
+    Serial.println("press <space> + <enter> to prevent using saved credentials");
+    Serial.print("using saved credentials in ");
+    while (defaultCounter <= 5) // 5s timer
+    {
+        if (Serial.available())
+        {
+            Serial.read();
+            break;
+        }
+        Serial.print(String(5 - defaultCounter) + " ");
+        delay(1000);
+        defaultCounter++;
+    }
+    Serial.println();         // for output formatting
+    clearSerialInputBuffer(); // clearing the input buffer
+
+    // managing the credentials input and default connections
+    if (defaultCounter <= 5)
+    {
+        while (!WifiManager::handleUserWifiConnectionRequest())
+            ; // managing the custom wifi connection
+        while (!ServerManager::handleUserWebserverUpdationRequest())
+            ; // managing custom webserver connection
+    }
+    else
+    {
+        Serial.println("using saved credentials...");
+        if (!WifiManager::connectDefaultWifi())
+        {
+            while (!WifiManager::handleUserWifiConnectionRequest())
+                ; // prompting user incase wifi credentials invalid
+        }
+        if (!ServerManager::connectDefaultWebserver())
+        {
+            while (!ServerManager::handleUserWebserverUpdationRequest())
+                ; // prompting user incase webserver adress is invalid
+        }
+    }
+
+    // initializing I2C and MPU9250 sensor
+    MPU9250Manager::init();
+
+    // setting led indicator to stable after successful connections and initialization
+    LED_indicator = WORKING_STATUS::STABLE;
+
+    // execute the controller after core setup
+    xTaskCreatePinnedToCore(
+        controllerLoop,
+        "sensorTask",
+        12288,
+        NULL,
+        2,
+        NULL,
+        1 // Core 1 (application core)
+    );
 }
 
 void loop()
 {
+    vTaskDelay(portMAX_DELAY); // preventing loop from execution
 }
