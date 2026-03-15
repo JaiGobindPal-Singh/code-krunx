@@ -125,12 +125,11 @@ void sendPostDataOverHttpAsync(void *pvParameters)
         LED_indicator = WORKING_STATUS::ERROR;
     }
     http.end(); // free up resources
+    vTaskDelete(NULL);
 
     /*testing
     xSemaphoreGive(httpMutex); // allow other http request
-    vTaskDelete(NULL);
     */
-    return;
 }
 
 /**
@@ -197,6 +196,8 @@ void controllerLoop(void *pvParameters)
             {
                 delayStrike++;
                 vTaskDelay(pdMS_TO_TICKS(SAMPLE_RATE_MS));
+                MPU9250Manager::update();
+                magnitude = MPU9250Manager::linearAcceleration;
                 CircularBuffer::insertData(magnitude); // inserting the data in buffer during the delay
             }
 
