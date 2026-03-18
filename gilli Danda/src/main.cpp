@@ -7,17 +7,20 @@
  */
 #include "config.h"
 #include "circularBufferSensorData.h"
-#include "mpu9250_manger.h"
 #include "server_manager.h"
 #include "storage_manager.h"
 #include "strikeManager.h"
 #include "wifi_manager.h"
+
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <MPU6500_WE.h>
+#include <Wire.h>
 #include <HTTPClient.h>
+#define MPU9250_ADDR 0x68 // I2C adress of sensor
 
 //* globlal initializations
-SemaphoreHandle_t httpMutex; // thread manager
+// SemaphoreHandle_t httpMutex; // thread manager
 
 JsonDocument doc; // json document for managing the json data
 
@@ -27,7 +30,26 @@ WORKING_STATUS LED_indicator; // LED_indicator controls the LED_BUILTIN
 
 uint16_t delayStrike = 0; // variable to control the strike delay and post data
 
+MPU6500_WE imu(&Wire, MPU9250_ADDR); // object to manage the sensor and retrieve data from it
+
 //* Helper Methods
+/**
+ * @brief Updates the linear acceleration by reading the acceleration values from the MPU9250 sensor, calculating the magnitude of the acceleration, converting it to m/s^2, and removing the effect of gravity. The calculated linear acceleration is stored in a static member variable for later retrieval.
+
+ * @return {float} - Returns the calculated linear acceleration in m/s^2.
+ */
+float MPUupdate()
+{
+    xyzFloat g = imu.getGValues();
+    float ax = g.x * 9.81f;
+    float ay = g.y * 9.81f;
+    float az = g.z * 9.81f;
+    float magnitudeG = sqrt(ax * ax + ay * ay + az * az);
+
+    magnitudeG = absFloat(magnitudeG - 9.81); // removing gravity effect
+    return magnitudeG;
+}
+
 /**
  * @brief LEDManager is a task that manages the LED_BUILTIN to indicate the working status of the esp32. It uses the LED_indicator variable to determine the status and blinks the LED accordingly.
  *
@@ -99,6 +121,7 @@ void sendPostDataOverHttpAsync(void *pvParameters)
         xSemaphoreGive(httpMutex);
         vTaskDelete(NULL);
         */
+        vTaskDelete(NULL);
         return;
     }
     HTTPClient http; // http object to manage http communications
@@ -181,10 +204,7 @@ void controllerLoop(void *pvParameters)
     for (;;)
     {
         // updating the sensor data and calculating the linear acceleration magnitude
-        MPU9250Manager::update();
-
-        // magnitude contains the linear acceleration calculated from the sensor data
-        float magnitude = MPU9250Manager::linearAcceleration;
+        float magnitude = MPUupdate();
 
         // if strike is detected send data
         if (StrikeManager::detectStrike(magnitude))
@@ -196,8 +216,7 @@ void controllerLoop(void *pvParameters)
             {
                 delayStrike++;
                 vTaskDelay(pdMS_TO_TICKS(SAMPLE_RATE_MS));
-                MPU9250Manager::update();
-                magnitude = MPU9250Manager::linearAcceleration;
+                magnitude = MPUupdate();
                 CircularBuffer::insertData(magnitude); // inserting the data in buffer during the delay
             }
 
@@ -226,16 +245,67 @@ void controllerLoop(void *pvParameters)
             // resetting the buffer so it can store new values
             CircularBuffer::resetBuffer();
         }
+        else
+        {
+            CircularBuffer::insertData(magnitude); // inserting the data in buffer during the delay and normal operation to have the live data ready in case of strike detection
+        }
 
         delayStrike = 0; // resetting the delay
         vTaskDelay(pdMS_TO_TICKS(SAMPLE_RATE_MS));
     }
 }
 
+// setup contains the initial setup
 void setup()
 {
-    // Starting serial communication for debugging and user information
+
+    delay(3000); // delay to allow time for the user to open the serial monitor after reset and see the initial messages and status of the device
+
+    // start LED task
+    pinMode(LED_BUILTIN, OUTPUT);
+    LED_indicator = WORKING_STATUS::CONNECTING;
+    manageLEDThread();
+
+    // setting up serial communication for debugging and user information
     Serial.begin(115200);
+    delay(500);
+
+    // I2C start
+    Wire.begin(SDA_PIN, SCL_PIN);
+
+    // delay to allow sensor to be ready
+    delay(500);
+
+    // Checking device is working or not
+    Wire.beginTransmission(0x68);
+    if (Wire.endTransmission() == 0)
+    {
+        Serial.println("MPU detected");
+    }
+    else
+    {
+        Serial.println("MPU NOT detected");
+    }
+
+    // INIT SENSOR (WHO_AM_I 0x70 => MPU6500 class device)
+    Serial.printf("Sensor WHO_AM_I: 0x%02X\n", imu.whoAmI());
+    bool sensorReady = false;
+    while (!sensorReady)
+    {
+        sensorReady = imu.init();
+        if (!sensorReady)
+        {
+            Serial.println("MPU6500 init failed");
+            LED_indicator = WORKING_STATUS::ERROR;
+            delay(1000);
+        }
+    }
+
+    // setting the sensor
+    Serial.println("MPU6500 connected");
+    imu.setAccRange(MPU9250_ACC_RANGE_16G); // setting the accelerometer range to 16G for better sensitivity in strike detection
+    imu.enableAccDLPF(false);
+    imu.setSampleRateDivider(9); // setting sample rate to 100Hz (1000 / (9+1))
 
     // reserving the memory to prevent fragmentation
     requestData.reserve(16000);
@@ -243,11 +313,6 @@ void setup()
     /* testing
     httpMutex = xSemaphoreCreateMutex(); // defining the mutex to manage threads
     */
-
-    // setting up led indicator thread
-    pinMode(LED_BUILTIN, OUTPUT);
-    LED_indicator = WORKING_STATUS::CONNECTING;
-    manageLEDThread();
 
     // printing available wifi networks for debugging and user information
     WifiManager::scanWifiNetworks();
@@ -294,9 +359,6 @@ void setup()
                 ; // prompting user incase webserver adress is invalid
         }
     }
-
-    // initializing I2C and MPU9250 sensor
-    MPU9250Manager::init();
 
     // setting led indicator to stable after successful connections and initialization
     LED_indicator = WORKING_STATUS::STABLE;
