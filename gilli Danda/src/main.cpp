@@ -40,14 +40,46 @@ MPU6500_WE imu(&Wire, MPU9250_ADDR); // object to manage the sensor and retrieve
  */
 float MPUupdate()
 {
-    xyzFloat g = imu.getGValues();
-    float ax = g.x * 9.81f;
-    float ay = g.y * 9.81f;
-    float az = g.z * 9.81f;
-    float magnitudeG = sqrt(ax * ax + ay * ay + az * az);
+    constexpr float GRAVITY = 9.80665f;
+    constexpr float GRAVITY_ALPHA = 0.92f; // high-pass: tracks slow gravity changes at 100 Hz
+    constexpr float OUTPUT_ALPHA = 0.3f;   // low-pass: smooths output, suppresses noise spikes
 
-    magnitudeG = absFloat(magnitudeG - 9.81); // removing gravity effect
-    return magnitudeG;
+    static bool gravityInitialized = false;
+    static float gravityX = 0.0f;
+    static float gravityY = 0.0f;
+    static float gravityZ = GRAVITY;
+    static float filteredMagnitude = 0.0f;
+
+    xyzFloat g = imu.getGValues();
+    float ax = g.x * GRAVITY;
+    float ay = g.y * GRAVITY;
+    float az = g.z * GRAVITY;
+
+    // Initialize gravity estimate on first call
+    if (!gravityInitialized)
+    {
+        gravityX = ax;
+        gravityY = ay;
+        gravityZ = az;
+        gravityInitialized = true;
+    }
+
+    // Update gravity estimate using high-pass filter (low alpha = slow adaptation)
+    gravityX = (GRAVITY_ALPHA * gravityX) + ((1.0f - GRAVITY_ALPHA) * ax);
+    gravityY = (GRAVITY_ALPHA * gravityY) + ((1.0f - GRAVITY_ALPHA) * ay);
+    gravityZ = (GRAVITY_ALPHA * gravityZ) + ((1.0f - GRAVITY_ALPHA) * az);
+
+    // Compute linear acceleration by removing gravity vector
+    float linearX = ax - gravityX;
+    float linearY = ay - gravityY;
+    float linearZ = az - gravityZ;
+
+    // Magnitude of true linear acceleration (motion only, no rotation)
+    float linearMagnitude = sqrtf((linearX * linearX) + (linearY * linearY) + (linearZ * linearZ));
+
+    // Smooth output to suppress single-sample noise spikes
+    filteredMagnitude = (OUTPUT_ALPHA * linearMagnitude) + ((1.0f - OUTPUT_ALPHA) * filteredMagnitude);
+    return filteredMagnitude;
 }
 
 /**
@@ -259,7 +291,7 @@ void controllerLoop(void *pvParameters)
 void setup()
 {
 
-    delay(3000); // delay to allow time for the user to open the serial monitor after reset and see the initial messages and status of the device
+    //testing delay(3000); // delay to allow time for the user to open the serial monitor after reset and see the initial messages and status of the device
 
     // start LED task
     pinMode(LED_BUILTIN, OUTPUT);
@@ -304,7 +336,7 @@ void setup()
     // setting the sensor
     Serial.println("MPU6500 connected");
     imu.setAccRange(MPU9250_ACC_RANGE_16G); // setting the accelerometer range to 16G for better sensitivity in strike detection
-    imu.enableAccDLPF(false);
+    imu.enableAccDLPF(true);
     imu.setSampleRateDivider(9); // setting sample rate to 100Hz (1000 / (9+1))
 
     // reserving the memory to prevent fragmentation
