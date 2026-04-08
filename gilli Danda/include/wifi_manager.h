@@ -15,6 +15,8 @@ class WifiManager{
     static void scanWifiNetworks();
     static bool handleUserWifiConnectionRequest();
     static bool connectDefaultWifi();
+    static void storeWifiCredentials(const char* SSID, const char* password);
+    static bool openCaptivePortalWithParams(const char* pId, const char* pLabel, const char* pDefault, const int psize, String& paramValue);
 };
 
 #endif

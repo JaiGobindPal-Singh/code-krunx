@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include <WiFi.h>
+#include <WiFiManager.h> 
 #include "storage_manager.h"
 
 /**
@@ -12,7 +13,6 @@ bool WifiManager::connectWifi(const char *SSID, const char *WIFI_PASS)
 {
     // disconnect any previous wifi connection
     WiFi.disconnect(true);
-    delay(1000);
 
     // setting wifi mode and setSleep to false to prevent powersave wifi mode which can cause disconnection during operation
     WiFi.mode(WIFI_STA);
@@ -39,7 +39,7 @@ bool WifiManager::connectWifi(const char *SSID, const char *WIFI_PASS)
     return true;
 }
 
-/**
+/** DEPRECIATED
  * @brief Scans for available Wi-Fi networks and prints their SSIDs and signal strengths to the serial monitor.
  * @return {void} return nothing, it just prints the available networks to the serial monitor
  */
@@ -73,7 +73,7 @@ void WifiManager::scanWifiNetworks()
     }
 }
 
-/**
+/**  DEPRECIATED
  * @brief Handles the user request to connect to a Wi-Fi network by prompting for SSID and password, and then attempting to connect using the provided credentials.it also saves the wifi credentials in storage for auto connection
  * 
  * @return {bool} - Returns true if the connection is successful, false otherwise.
@@ -153,5 +153,50 @@ bool WifiManager:: connectDefaultWifi(){
         return false;
     }
     Serial.println("wifi connected");
+    return true;
+}
+
+/**
+ * @brief Stores the Wi-Fi credentials (SSID and password) in the ESP32's storage for future use. This allows the device to automatically connect to the Wi-Fi network in subsequent attempts without requiring user input.
+ * @param {char*} SSID - The SSID of the Wi-Fi network to be stored.
+ * @param {char*} password - The password for the Wi-Fi network to be stored
+ * @return {void} - This function does not return any value, it just stores the credentials in storage
+ */
+void WifiManager:: storeWifiCredentials(const char* SSID, const char* password){
+    StorageManager::saveKeyValueToStorage("wifi_ssid", String(SSID));
+    StorageManager::saveKeyValueToStorage("wifi_pass", String(password));
+}
+
+/**
+ * @brief Opens a captive portal to allow the user to input Wi-Fi credentials and a custom parameter. It uses the WiFiManager library to create a captive portal with a custom parameter for the server IP address. The function waits for the user to connect to the captive portal, input the required information, and then attempts to connect to the Wi-Fi network using the provided credentials. It also saves the Wi-Fi credentials in storage for future use.
+ * @param {char*} pId - The ID of the custom parameter to be added to the captive portal.
+ * @param {char*} pLabel - The label for the custom parameter to be displayed in the captive portal.
+ * @param {char*} pDefault - The default value for the custom parameter to be displayed in the captive portal.
+ * @param {int} psize - The maximum length of the custom parameter value.
+ * @param {String&} paramValue - A reference to a String variable where the value of the custom parameter will be stored after the user inputs it in the captive portal.
+ * @return {bool} - Returns true if the captive portal is opened successfully, the user inputs the required information, and the device connects to the Wi-Fi network; false otherwise.
+ */
+bool WifiManager:: openCaptivePortalWithParams(const char* pId, const char* pLabel, const char* pDefault, const int psize, String& paramValue){
+    // Initialize WiFiManager
+    WiFiManager wm;
+    // Define the custom parameter (ID, Label, Default Value, Length)
+    WiFiManagerParameter custom_server_ip(pId, pLabel, pDefault, psize);
+    // Add the parameter to the portal UI
+    wm.addParameter(&custom_server_ip);
+    //setting portal time
+    wm.setConfigPortalTimeout(CAPTIVE_PORTAL_TIMEOUT);
+    //opening captive portal with the defined parameter
+    if (!wm.autoConnect("Code Krunx init")) {
+    Serial.println("Failed to connect, restarting...");
+        return false;
+    }
+    //getting the wifi credentials from the captive portal and saving them in storage for future use
+    String wifiName = wm.getWiFiSSID();
+    String wifiPass = wm.getWiFiPass();
+    WifiManager::storeWifiCredentials(wifiName.c_str(), wifiPass.c_str());
+
+    // Save the param value into variable 
+    paramValue = String(custom_server_ip.getValue());
+
     return true;
 }

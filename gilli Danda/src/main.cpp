@@ -291,8 +291,6 @@ void controllerLoop(void *pvParameters)
 void setup()
 {
 
-    //testing delay(3000); // delay to allow time for the user to open the serial monitor after reset and see the initial messages and status of the device
-
     // start LED task
     pinMode(LED_BUILTIN, OUTPUT);
     LED_indicator = WORKING_STATUS::CONNECTING;
@@ -300,13 +298,8 @@ void setup()
 
     // setting up serial communication for debugging and user information
     Serial.begin(115200);
-    delay(500);
-
     // I2C start
     Wire.begin(SDA_PIN, SCL_PIN);
-
-    // delay to allow sensor to be ready
-    delay(500);
 
     // Checking device is working or not
     Wire.beginTransmission(0x68);
@@ -320,7 +313,7 @@ void setup()
     }
 
     // INIT SENSOR (WHO_AM_I 0x70 => MPU6500 class device)
-    Serial.printf("Sensor WHO_AM_I: 0x%02X\n", imu.whoAmI());
+    // Serial.printf("Sensor WHO_AM_I: 0x%02X\n", imu.whoAmI());    debugging purposes
     bool sensorReady = false;
     while (!sensorReady)
     {
@@ -346,12 +339,12 @@ void setup()
     httpMutex = xSemaphoreCreateMutex(); // defining the mutex to manage threads
     */
 
-    // printing available wifi networks for debugging and user information
-    WifiManager::scanWifiNetworks();
-
-    uint8_t defaultCounter = 0;
-
-    // prompting user to choose btw custom credentials or saved credentials
+    /** @degraded 
+    * printing available wifi networks for debugging and user information
+    * WifiManager::scanWifiNetworks();
+    * uint8_t defaultCounter = 0;
+    
+     // prompting user to choose btw custom credentials or saved credentials
     Serial.println("press <space> + <enter> to prevent using saved credentials");
     Serial.println("press <space> + <enter> to prevent using saved credentials");
     Serial.print("using saved credentials in ");
@@ -366,14 +359,14 @@ void setup()
         delay(1000);
         defaultCounter++;
     }
-    Serial.println();         // for output formatting
-    clearSerialInputBuffer(); // clearing the input buffer
+     Serial.println();         // for output formatting
+     clearSerialInputBuffer(); // clearing the input buffer
 
-    // managing the credentials input and default connections
+     // managing the credentials input and default connections
     if (defaultCounter <= 5)
     {
         while (!WifiManager::handleUserWifiConnectionRequest())
-            ; // managing the custom wifi connection
+             ; // managing the custom wifi connection
         while (!ServerManager::handleUserWebserverUpdationRequest())
             ; // managing custom webserver connection
     }
@@ -392,6 +385,9 @@ void setup()
         }
     }
 
+     */
+    
+    //TODO IMPLIMENT CAPTIVE PORTAL
     // setting led indicator to stable after successful connections and initialization
     LED_indicator = WORKING_STATUS::STABLE;
 

@@ -22,6 +22,7 @@ constexpr uint16_t STRIKE_THRESHOLD = 30;    //threshold for detecting strike
 constexpr uint16_t STRIKE_DELAY = 100;  //delay in ms after strike to send post request 
 constexpr size_t BUFFER_SIZE = 200; // buffer size of circular buffer
 constexpr uint16_t WIFI_CONNECT_TIMEOUT = 90;  //timeout in seconds for wifi connection attempts
+constexpr uint16_t CAPTIVE_PORTAL_TIMEOUT = 120;  //timeout in seconds for captive portal
 
 //* utility functions 
 //* note: utility functions must be inline to prevent linker errors
