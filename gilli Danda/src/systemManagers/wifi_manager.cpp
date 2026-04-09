@@ -1,7 +1,9 @@
 #include "wifi_manager.h"
 #include <WiFi.h>
-#include <WiFiManager.h> 
 #include "storage_manager.h"
+
+//initialize the static member of the class
+WiFiManager* WifiManager::wm = new WiFiManager();
 
 /**
  * @brief Connects to a Wi-Fi network using the provided SSID and password.
@@ -177,22 +179,20 @@ void WifiManager:: storeWifiCredentials(const char* SSID, const char* password){
  * @return {bool} - Returns true if the captive portal is opened successfully, the user inputs the required information, and the device connects to the Wi-Fi network; false otherwise.
  */
 bool WifiManager:: openCaptivePortalWithParams(const char* pId, const char* pLabel, const char* pDefault, const int psize, String& paramValue){
-    // Initialize WiFiManager
-    WiFiManager wm;
     // Define the custom parameter (ID, Label, Default Value, Length)
     WiFiManagerParameter custom_server_ip(pId, pLabel, pDefault, psize);
     // Add the parameter to the portal UI
-    wm.addParameter(&custom_server_ip);
+    WifiManager::wm->addParameter(&custom_server_ip);
     //setting portal time
-    wm.setConfigPortalTimeout(CAPTIVE_PORTAL_TIMEOUT);
+    WifiManager::wm->setConfigPortalTimeout(CAPTIVE_PORTAL_TIMEOUT);
     //opening captive portal with the defined parameter
-    if (!wm.autoConnect("Code Krunx init")) {
+    if (!WifiManager::wm->autoConnect("Code Krunx init")) {
     Serial.println("Failed to connect, restarting...");
         return false;
     }
     //getting the wifi credentials from the captive portal and saving them in storage for future use
-    String wifiName = wm.getWiFiSSID();
-    String wifiPass = wm.getWiFiPass();
+    String wifiName = WifiManager::wm->getWiFiSSID();
+    String wifiPass = WifiManager::wm->getWiFiPass();
     WifiManager::storeWifiCredentials(wifiName.c_str(), wifiPass.c_str());
 
     // Save the param value into variable 

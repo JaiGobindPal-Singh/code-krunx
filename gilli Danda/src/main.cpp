@@ -145,16 +145,17 @@ void sendPostDataOverHttpAsync(void *pvParameters)
     {
         Serial.println("wifi not connected");
         // starting the error indicator
-        LED_indicator = WORKING_STATUS::ERROR;
-
-        /*
-        testing
-        // allowing other http request and deleting the task
-        xSemaphoreGive(httpMutex);
-        vTaskDelete(NULL);
-        */
-        vTaskDelete(NULL);
-        return;
+        if(!WifiManager::connectDefaultWifi()){
+            /*
+            testing
+            // allowing other http request and deleting the task
+            xSemaphoreGive(httpMutex);
+            vTaskDelete(NULL);
+            */
+            LED_indicator = WORKING_STATUS::ERROR;
+            vTaskDelete(NULL);
+            return;
+        }
     }
     HTTPClient http; // http object to manage http communications
     http.setTimeout(HTTP_TIMEOUT);
@@ -327,7 +328,6 @@ void setup()
     }
 
     // setting the sensor
-    Serial.println("MPU6500 connected");
     imu.setAccRange(MPU9250_ACC_RANGE_16G); // setting the accelerometer range to 16G for better sensitivity in strike detection
     imu.enableAccDLPF(true);
     imu.setSampleRateDivider(9); // setting sample rate to 100Hz (1000 / (9+1))
@@ -387,7 +387,45 @@ void setup()
 
      */
     
-    //TODO IMPLIMENT CAPTIVE PORTAL
+    //*capative portal implimentation
+    String serverParam; // variable to store the custom server parameter from the captive portal
+    bool retryInit = true;   //var to manage the captive portal in case of failure and retry mechanism
+
+
+    //testing 
+    // WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam);
+    // Serial.println(serverParam); //DEBUGGING PURPOSES
+
+    do{
+        if(WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam)){
+            retryInit = false; 
+        }else{
+            LED_indicator = WORKING_STATUS::ERROR;
+            Serial.println("Failed to connect to Wi-Fi "); //DEBUGGING PURPOSES
+            continue; // retry opening captive portal
+        }
+        Serial.println(serverParam); //DEBUGGING PURPOSES
+        if(!ServerManager::setServer(serverParam)){
+             // fallback to default server in case of failure to set the custom server
+            if(!ServerManager::connectDefaultWebserver()){
+                Serial.println("Failed to set server"); //DEBUGGING PURPOSES
+                retryInit = true;
+                LED_indicator = WORKING_STATUS::ERROR;
+                WifiManager::wm->resetSettings();
+                delay(1000);
+                ESP.restart(); // restarting the device to reset the settings and retry the captive portal
+            }else{
+                Serial.println("Server set to default successfully"); //DEBUGGING PURPOSES
+                retryInit = false;
+            }
+        }else{
+            Serial.println("Server set successfully"); //DEBUGGING PURPOSES
+            retryInit = false;
+        }
+    }while(retryInit);
+
+    
+    
     // setting led indicator to stable after successful connections and initialization
     LED_indicator = WORKING_STATUS::STABLE;
 

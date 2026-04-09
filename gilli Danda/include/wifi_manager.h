@@ -8,9 +8,13 @@
 #ifndef WIFI_MANAGER_H
 #define WIFI_MANAGER_H
 #include "config.h"
+#include <WiFiManager.h> 
+
+//*note WifiManager is custom class whereas WiFiManager is imported library notice diff in capital 'F'.Risky:: can cause bugs but ok for now
 
 class WifiManager{
     public:
+    static WiFiManager* wm;
     static bool connectWifi(const char*, const char*);
     static void scanWifiNetworks();
     static bool handleUserWifiConnectionRequest();
