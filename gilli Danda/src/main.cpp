@@ -390,13 +390,14 @@ void setup()
     //*capative portal implimentation
     String serverParam; // variable to store the custom server parameter from the captive portal
     bool retryInit = true;   //var to manage the captive portal in case of failure and retry mechanism
-
+    WifiManager::wm->setConnectTimeout(20); //wifi connectivity and fallback timeout to 20s fixed time to prevent long waiting times in case of failure and start the retry mechanism
 
     //testing 
     // WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam);
     // Serial.println(serverParam); //DEBUGGING PURPOSES
-
+    Serial.print("starting captive portal"); //DEBUGGING PURPOSES
     do{
+        Serial.println("..."); //DEBUGGING PURPOSES
         if(WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam)){
             retryInit = false; 
         }else{
