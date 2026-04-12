@@ -10,7 +10,9 @@ const PORT = 3000;
 const io = initializeSocket(server);
 app.use(express.static('public')); //serve static files from public directory
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+    origin: 'https://sixsem-project-zxlt.onrender.com/',
+}));
 
 
 //simple get request endpoint to test server
