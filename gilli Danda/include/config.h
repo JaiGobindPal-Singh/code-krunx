@@ -14,7 +14,7 @@
 
 constexpr int SDA_PIN = 21; //SDA pin for I2C communication with the sensor
 constexpr int SCL_PIN = 22; //SCL pin for I2C communication with the sensor
-constexpr uint16_t HTTP_TIMEOUT = 2000; //timeout for HTTP requests in milliseconds
+constexpr uint16_t HTTP_TIMEOUT = 30000; //timeout for HTTP requests in milliseconds
 constexpr uint8_t SAMPLE_RATE_MS = 10;  //sample rate for reading sensor data in milliseconds
 constexpr uint16_t RINGING_THRESHOLD = 200; //threshold to prevent false strike detection 
 constexpr uint8_t LED_BUILTIN = 5;  //built in led pin for esp32, used for debugging and indication purposes
