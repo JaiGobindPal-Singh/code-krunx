@@ -398,7 +398,7 @@ void setup()
     Serial.print("starting captive portal"); //DEBUGGING PURPOSES
     do{
         Serial.println("..."); //DEBUGGING PURPOSES
-        if(WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam)){
+        if(WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 60, serverParam)){
             retryInit = false; 
         }else{
             LED_indicator = WORKING_STATUS::ERROR;
