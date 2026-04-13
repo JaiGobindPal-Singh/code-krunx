@@ -28,6 +28,8 @@ String requestData; // requestData is sensor data in json string format that wil
 
 WORKING_STATUS LED_indicator; // LED_indicator controls the LED_BUILTIN
 
+QueueHandle_t httpQueue; // queue to manage the http requests and prevent memory leaks and optimize memory usage by ensuring that only one request is sent at a time and the data is cleared after sending
+
 uint16_t delayStrike = 0; // variable to control the strike delay and post data
 
 MPU6500_WE imu(&Wire, MPU9250_ADDR); // object to manage the sensor and retrieve data from it
@@ -119,24 +121,13 @@ void LEDManager(void *pvParameters)
 }
 
 /**
+ * @deprecated this method is replaced by the http worker task
  * @brief sendPostDataOverHttpAsync is a task that sends the sensor data over http in an asynchronous way. It takes the sensor data in json string format as a parameter and sends it to the server using the HTTPClient library. It also manages the response from the server and updates the LED indicator accordingly.
  * @return void
  * @note this task should be created as a separate task in the main loop or in the
  */
 void sendPostDataOverHttpAsync(void *pvParameters)
 {
-    //*commented for temp time to check if system can handle multiple http request without mutex, if it works fine we can remove the mutex to optimize the code and prevent any possible deadlocks in future
-    /*
-    testing
-    // only allowing one http request at a time
-    if (xSemaphoreTake(httpMutex, 0) != pdTRUE)
-    {
-        delete (String *)pvParameters;
-        vTaskDelete(NULL);
-        return;
-    }
-    */
-
     // clearing memory of the parameter after copying the data to prevent memory leaks and optimize memory usage
     String data = *((String *)pvParameters);
     delete (String *)pvParameters;
@@ -145,7 +136,8 @@ void sendPostDataOverHttpAsync(void *pvParameters)
     {
         Serial.println("wifi not connected");
         // starting the error indicator
-        if(!WifiManager::connectDefaultWifi()){
+        if (!WifiManager::connectDefaultWifi())
+        {
             /*
             testing
             // allowing other http request and deleting the task
@@ -195,16 +187,23 @@ void sendPostDataOverHttpAsync(void *pvParameters)
  */
 void sendDataOverHttpThread(String param)
 {
-    // creating copy of payload to send to the async task and storing result
+    String *payload = new String(param);
+    if (xQueueSend(httpQueue, &payload, 0) != pdTRUE)
+    {
+        delete payload;
+        Serial.println("Queue full, dropping request");
+    }
+    /** @deprecated
+     // creating copy of payload to send to the async task and storing result
     String *payload = new String(param);
     BaseType_t result = xTaskCreatePinnedToCore(
-        sendPostDataOverHttpAsync, /*  Task function.              */
-        "sending data",            /*   Name of task.              */
-        8192,                      /*    Stack size of task        */
-        payload,                   /*     Parameter of the task    */
-        3,                         /*      Priority of the task    */
-        NULL,                      /*       Task ID                */
-        0                          /*       Task core              */
+        sendPostDataOverHttpAsync, // Task function.
+        "sending data",            //  Name of task.
+        8192,                      //   Stack size of task
+        payload,                   //    Parameter of the task
+        3,                         //     Priority of the task
+        NULL,                      //      Task ID
+        0                          //      Task core
     );
 
     // freeing memory if task creation failed
@@ -213,8 +212,57 @@ void sendDataOverHttpThread(String param)
         delete payload;
         Serial.println("Error: Failed to create HTTP task, memory freed.");
     }
+    */
 }
 
+/**
+ * @brief httpWorkerTask is a task that manages the http requests in an asynchronous way. It takes the sensor data from the httpQueue and sends it to the server using the HTTPClient library. It also manages the response from the server and updates the LED indicator accordingly. This task runs in an infinite loop and should be created as a separate task in the setup function to run concurrently with the main loop.
+ * @param pvParameters not used {reserved for async parameters if needed in future}
+ * @return void
+ */
+void httpWorkerTask(void *pvParameters)
+{
+    for (;;)
+    {
+        String *dataPtr;
+
+        if (xQueueReceive(httpQueue, &dataPtr, portMAX_DELAY) == pdTRUE)
+        {
+            String data = *dataPtr;
+            delete dataPtr;
+
+            if (WiFi.status() != WL_CONNECTED)
+            {
+                LED_indicator = WORKING_STATUS::ERROR;
+                continue;
+            }
+
+            HTTPClient http;
+            http.setTimeout(HTTP_TIMEOUT);
+
+            String fullUrl = ServerManager::getServer() + "sensor-data/";
+            http.begin(fullUrl.c_str());
+            http.addHeader("Content-Type", "application/json");
+
+            int code = http.POST(data);
+
+            if (code == HTTP_CODE_OK)
+            {
+                Serial.println(http.getString());
+            }
+            else
+            {
+                Serial.printf("HTTP error: %d\n", code);
+                LED_indicator = WORKING_STATUS::ERROR;
+            }
+
+            http.end();
+
+            // Important: allow TLS memory cleanup
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+    }
+}
 /**
  * @brief manageLEDThread is a function that creates a task to manage the LED_BUILTIN to indicate the working status of the esp32. It uses the LED_indicator variable to determine the status and blinks the LED accordingly. It should be called in the setup function to start the LED management task.
  * @return void
@@ -335,100 +383,67 @@ void setup()
     // reserving the memory to prevent fragmentation
     requestData.reserve(16000);
 
-    /* testing
-    httpMutex = xSemaphoreCreateMutex(); // defining the mutex to manage threads
-    */
-
-    /** @degraded 
-    * printing available wifi networks for debugging and user information
-    * WifiManager::scanWifiNetworks();
-    * uint8_t defaultCounter = 0;
-    
-     // prompting user to choose btw custom credentials or saved credentials
-    Serial.println("press <space> + <enter> to prevent using saved credentials");
-    Serial.println("press <space> + <enter> to prevent using saved credentials");
-    Serial.print("using saved credentials in ");
-    while (defaultCounter <= 5) // 5s timer
-    {
-        if (Serial.available())
-        {
-            Serial.read();
-            break;
-        }
-        Serial.print(String(5 - defaultCounter) + " ");
-        delay(1000);
-        defaultCounter++;
-    }
-     Serial.println();         // for output formatting
-     clearSerialInputBuffer(); // clearing the input buffer
-
-     // managing the credentials input and default connections
-    if (defaultCounter <= 5)
-    {
-        while (!WifiManager::handleUserWifiConnectionRequest())
-             ; // managing the custom wifi connection
-        while (!ServerManager::handleUserWebserverUpdationRequest())
-            ; // managing custom webserver connection
-    }
-    else
-    {
-        Serial.println("using saved credentials...");
-        if (!WifiManager::connectDefaultWifi())
-        {
-            while (!WifiManager::handleUserWifiConnectionRequest())
-                ; // prompting user incase wifi credentials invalid
-        }
-        if (!ServerManager::connectDefaultWebserver())
-        {
-            while (!ServerManager::handleUserWebserverUpdationRequest())
-                ; // prompting user incase webserver adress is invalid
-        }
-    }
-
-     */
-    
     //*capative portal implimentation
-    String serverParam; // variable to store the custom server parameter from the captive portal
-    bool retryInit = true;   //var to manage the captive portal in case of failure and retry mechanism
-    WifiManager::wm->setConnectTimeout(20); //wifi connectivity and fallback timeout to 20s fixed time to prevent long waiting times in case of failure and start the retry mechanism
+    String serverParam;                     // variable to store the custom server parameter from the captive portal
+    bool retryInit = true;                  // var to manage the captive portal in case of failure and retry mechanism
+    WifiManager::wm->setConnectTimeout(20); // wifi connectivity and fallback timeout to 20s fixed time to prevent long waiting times in case of failure and start the retry mechanism
 
-    //testing 
-    // WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam);
-    // Serial.println(serverParam); //DEBUGGING PURPOSES
-    Serial.print("starting captive portal"); //DEBUGGING PURPOSES
-    do{
-        Serial.println("..."); //DEBUGGING PURPOSES
-        if(WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","https://sixsem-project-zxlt.onrender.com/", 60, serverParam)){
-            retryInit = false; 
-        }else{
-            LED_indicator = WORKING_STATUS::ERROR;
-            Serial.println("Failed to connect to Wi-Fi "); //DEBUGGING PURPOSES
-            continue; // retry opening captive portal
+    // testing
+    //  WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/","", 40, serverParam);
+    //  Serial.println(serverParam); //DEBUGGING PURPOSES
+    Serial.print("starting captive portal"); // DEBUGGING PURPOSES
+    do
+    {
+        Serial.println("..."); // DEBUGGING PURPOSES
+        if (WifiManager::openCaptivePortalWithParams("server", "Server URL http://example.com/api/", "https://sixsem-project-zxlt.onrender.com/", 60, serverParam))
+        {
+            retryInit = false;
         }
-        Serial.println(serverParam); //DEBUGGING PURPOSES
-        if(!ServerManager::setServer(serverParam)){
-             // fallback to default server in case of failure to set the custom server
-            if(!ServerManager::connectDefaultWebserver()){
-                Serial.println("Failed to set server"); //DEBUGGING PURPOSES
+        else
+        {
+            LED_indicator = WORKING_STATUS::ERROR;
+            Serial.println("Failed to connect to Wi-Fi "); // DEBUGGING PURPOSES
+            continue;                                      // retry opening captive portal
+        }
+        Serial.println(serverParam); // DEBUGGING PURPOSES
+        if (!ServerManager::setServer(serverParam))
+        {
+            // fallback to default server in case of failure to set the custom server
+            if (!ServerManager::connectDefaultWebserver())
+            {
+                Serial.println("Failed to set server"); // DEBUGGING PURPOSES
                 retryInit = true;
                 LED_indicator = WORKING_STATUS::ERROR;
                 WifiManager::wm->resetSettings();
                 delay(1000);
                 ESP.restart(); // restarting the device to reset the settings and retry the captive portal
-            }else{
-                Serial.println("Server set to default successfully"); //DEBUGGING PURPOSES
+            }
+            else
+            {
+                Serial.println("Server set to default successfully"); // DEBUGGING PURPOSES
                 retryInit = false;
             }
-        }else{
-            Serial.println("Server set successfully"); //DEBUGGING PURPOSES
+        }
+        else
+        {
+            Serial.println("Server set successfully"); // DEBUGGING PURPOSES
             retryInit = false;
         }
-    }while(retryInit);
+    } while (retryInit);
 
-    
-    
     // setting led indicator to stable after successful connections and initialization
     LED_indicator = WORKING_STATUS::STABLE;
+
+    // initialized http queue and started http worker task to manage the http requests in queue.
+    httpQueue = xQueueCreate(5, sizeof(String *));
+    xTaskCreatePinnedToCore(
+        httpWorkerTask,
+        "httpWorker",
+        8192,
+        NULL,
+        2,
+        NULL,
+        0);
 
     // execute the controller after core setup
     xTaskCreatePinnedToCore(
